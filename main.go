@@ -123,15 +123,10 @@ func decompress(r io.Reader, w io.Writer) {
 			}
 
 			finchar = suffixof[code]
-			log.Println("code: ", code, "finchar: ", finchar)
 			stack = append([]byte{finchar}, stack...)
-			log.Println("incode: ", incode, " writing: ", stack)
 			w.Write(stack)
 
 			if free_ent < maxmaxcode {
-				log.Println("free_ent ",
-					free_ent, " oldcode ", oldcode,
-					" finchar ", finchar)
 				prefixof[free_ent] = oldcode
 				suffixof[free_ent] = finchar
 				free_ent += 1
@@ -142,7 +137,6 @@ func decompress(r io.Reader, w io.Writer) {
 		// Save the bits at the end of the buffer that do not
 		// make a complete input code.
 		i := posbits / 8
-		log.Print("len(buf) ", len(buf), " posbits ", posbits)
 		posbits %= 8
 		saved := append([]byte{}, buf[i:]...)
 		n, err := r.Read(buf)
