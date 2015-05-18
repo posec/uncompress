@@ -13,7 +13,7 @@ func main() {
 
 var info = flag.Bool("info", true, "display various internal info")
 
-// Clear Code; used when block_mod is true.
+// Clear Code; used when block_mode is true.
 const CLEAR = 257
 
 func decompress(r io.Reader, w io.Writer) {
