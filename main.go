@@ -17,9 +17,12 @@ var info = flag.Bool("info", true, "display various internal info")
 const CLEAR = 257
 
 func decompress(r io.Reader, w io.Writer) {
-	buf := make([]byte, 10)
+	// (drj) I think it needs to be at least 16*8 to make
+	//  the reset logic correct.
+	buf := make([]byte, 140)
 
 	n, err := r.Read(buf)
+	bytesRead := n
 	if n < 3 {
 		log.Fatal("too short")
 	}
@@ -30,7 +33,7 @@ func decompress(r io.Reader, w io.Writer) {
 	if buf[0] != 037 || buf[1] != 0235 {
 		log.Fatal("not MAGIC")
 	}
-	maxbits := buf[2] & 0x1f
+	maxbits := uint(buf[2]) & 0x1f
 	block_mode := (buf[2] & 0x80) != 0
 	maxmaxcode := uint(1) << maxbits
 
@@ -70,7 +73,14 @@ func decompress(r io.Reader, w io.Writer) {
 	for {
 		for posbits+n_bits <= uint(len(buf))*8 {
 			if free_ent > maxcode {
-				panic("unimplemented grow")
+				n_bits += 1
+				bitmask = uint(1)<<n_bits - 1
+				if n_bits == maxbits {
+					maxcode = maxmaxcode
+				} else {
+					maxcode = bitmask
+				}
+				continue
 			}
 
 			// The next symbol is extracted from the next 2
@@ -140,6 +150,7 @@ func decompress(r io.Reader, w io.Writer) {
 		posbits %= 8
 		saved := append([]byte{}, buf[i:]...)
 		n, err := r.Read(buf)
+		bytesRead += n
 		if n > 0 {
 			buf = append(saved, buf[:n]...)
 			continue
