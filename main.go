@@ -177,5 +177,4 @@ func decompress(r io.Reader, w io.Writer) {
 			log.Fatal(err)
 		}
 	}
-
 }
