@@ -17,9 +17,7 @@ var info = flag.Bool("info", true, "display various internal info")
 const CLEAR = 256
 
 func decompress(r io.Reader, w io.Writer) {
-	// (drj) I think it needs to be at least 16*8 to make
-	//  the reset logic correct.
-	buf := make([]byte, 140)
+	buf := make([]byte, 14)
 
 	n, err := r.Read(buf)
 	bytesRead := n
