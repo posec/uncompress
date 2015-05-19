@@ -122,16 +122,19 @@ func decompress(r io.Reader, w io.Writer) {
 			// change later).
 			incode := code
 
+			stack := []byte{}
+
 			if code >= free_ent {
+				// Special case for KwKwK
 				if code > free_ent {
 					log.Fatalf("corrupt input, code=%v\n", code)
 				}
-				panic("not implemented: KwKwK case")
+				code = oldcode
+				stack = append(stack, finchar)
 			}
 
 			// Using the tables, reverse the code into a
 			// sequence of bytes.
-			stack := []byte{}
 			for code >= 256 {
 				stack = append([]byte{suffixof[code]}, stack...)
 				code = prefixof[code]
