@@ -14,7 +14,7 @@ func main() {
 var info = flag.Bool("info", true, "display various internal info")
 
 // Clear Code; used when block_mode is true.
-const CLEAR = 257
+const CLEAR = 256
 
 func decompress(r io.Reader, w io.Writer) {
 	// (drj) I think it needs to be at least 16*8 to make
@@ -111,7 +111,12 @@ func decompress(r io.Reader, w io.Writer) {
 				continue
 			}
 			if code == CLEAR && block_mode {
-				panic("unimplemented CLEAR")
+				prefixof = map[uint]uint{}
+				free_ent = 256
+				n_bits = 9
+				bitmask = uint(1)<<n_bits - 1
+				maxcode = bitmask
+				continue
 			}
 			// The code from the input stream (code may
 			// change later).
