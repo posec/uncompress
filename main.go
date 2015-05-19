@@ -8,10 +8,11 @@ import (
 )
 
 func main() {
+	flag.Parse()
 	decompress(os.Stdin, os.Stdout)
 }
 
-var info = flag.Bool("info", true, "display various internal info")
+var info = flag.Bool("info", false, "display various internal info")
 
 // Clear Code; used when block_mode is true.
 const CLEAR = 256
