@@ -128,7 +128,7 @@ func decompress(r io.Reader, w io.Writer) {
 					log.Fatalf("corrupt input, code=%v\n", code)
 				}
 				code = oldcode
-				stack = append(stack, finchar)
+				stack = []byte{finchar}
 			}
 
 			// Using the tables, reverse the code into a
