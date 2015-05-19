@@ -154,16 +154,21 @@ func decompress(r io.Reader, w io.Writer) {
 		// make a complete input code.
 		i := posbits / 8
 		posbits %= 8
-		saved := append([]byte{}, buf[i:]...)
-		n, err := r.Read(buf)
+		remainder := buf[i:]
+		R := len(remainder)
+		copy(buf, remainder)
+		n, err := r.Read(buf[R:])
 		bytesRead += n
+		buf = buf[:n+R]
 		if n > 0 {
-			buf = append(saved, buf[:n]...)
+			if *info {
+				log.Printf("buffer len %d\n", len(buf))
+			}
 			continue
 		}
 		if err == io.EOF {
-			if len(saved) > 1 ||
-				(len(saved) == 1 && (saved[0]>>posbits) != 0) {
+			if len(remainder) > 1 ||
+				(len(remainder) == 1 && (remainder[0]>>posbits) != 0) {
 				log.Println("Early EOF. File truncated?")
 			}
 			break
