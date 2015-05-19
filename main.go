@@ -161,9 +161,6 @@ func decompress(r io.Reader, w io.Writer) {
 		bytesRead += n
 		buf = buf[:n+R]
 		if n > 0 {
-			if *info {
-				log.Printf("buffer len %d\n", len(buf))
-			}
 			continue
 		}
 		if err == io.EOF {
