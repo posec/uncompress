@@ -150,22 +150,25 @@ func decompress(r io.Reader, w io.Writer) {
 			oldcode = incode
 		}
 
-		// Save the bits at the end of the buffer that do not
-		// make a complete input code.
+		// Copy the bits at the end of the buffer that do not
+		// make a complete input code to the beginning
+		// of the buffer.
 		i := posbits / 8
 		posbits %= 8
 		remainder := buf[i:]
 		R := len(remainder)
 		copy(buf, remainder)
+		// Fill the rest of the buffer.
 		n, err := r.Read(buf[R:])
 		bytesRead += n
 		buf = buf[:n+R]
+
 		if n > 0 {
 			continue
 		}
+
 		if err == io.EOF {
-			if len(remainder) > 1 ||
-				(len(remainder) == 1 && (remainder[0]>>posbits) != 0) {
+			if R > 1 || (R == 1 && (buf[0]>>posbits) != 0) {
 				log.Println("Early EOF. File truncated?")
 			}
 			break
