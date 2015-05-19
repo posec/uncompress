@@ -63,11 +63,10 @@ func decompress(r io.Reader, w io.Writer) {
 		free_ent += 1
 	}
 
-	buf = buf[3:]
 	// Position, in bits, of next unread symbol.
 	// Bits within a byte are indexed with 0 (mod 8) being
 	// the least significant bit.
-	posbits := uint(0)
+	posbits := uint(3 * 8)
 
 	for {
 		for posbits+n_bits <= uint(len(buf))*8 {
