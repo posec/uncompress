@@ -44,11 +44,14 @@ func decompress(r io.Reader, w io.Writer) {
 		log.Fatalf("compressed with %d bits; this is too much for me\n")
 	}
 
+	// The value of a suffix is a _byte_ (to output);
+	// the value of a prefix is a _code_ (as uint).
 	suffixof := map[uint]byte{}
-	for i := 0; i < 256; i++ {
-		suffixof[uint(i)] = byte(i)
-	}
 	prefixof := map[uint]uint{}
+	for i := uint(0); i < 256; i++ {
+		suffixof[i] = byte(i)
+		prefixof[i] = 99999
+	}
 
 	// Number of bits in input code, currently
 	n_bits := uint(9)
