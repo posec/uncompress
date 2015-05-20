@@ -13,27 +13,27 @@ func main() {
 }
 
 var info = flag.Bool("info", false, "display various internal info")
+var codeFlag = flag.Bool("code", false, "display all codes")
 
 // Clear Code; used when block_mode is true.
 const CLEAR = 256
 
 func decompress(r io.Reader, w io.Writer) {
-	buf := make([]byte, 14)
+	header := make([]byte, 3)
 
-	n, err := r.Read(buf)
-	bytesRead := n
-	if n < 3 {
+	n, err := r.Read(header)
+	if n < len(header) {
 		log.Fatal("too short")
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if buf[0] != 037 || buf[1] != 0235 {
+	if header[0] != 037 || header[1] != 0235 {
 		log.Fatal("not MAGIC")
 	}
-	maxbits := uint(buf[2]) & 0x1f
-	block_mode := (buf[2] & 0x80) != 0
+	maxbits := uint(header[2]) & 0x1f
+	block_mode := (header[2] & 0x80) != 0
 	maxmaxcode := uint(1) << maxbits
 
 	if *info {
@@ -66,10 +66,14 @@ func decompress(r io.Reader, w io.Writer) {
 	// Position, in bits, of next unread symbol.
 	// Bits within a byte are indexed with 0 (mod 8) being
 	// the least significant bit.
-	posbits := uint(3 * 8)
+	posbits := uint(0)
+	buf := []byte{}
+	clear_flag := false
 
 	for {
-		for posbits+n_bits <= uint(len(buf))*8 {
+		if clear_flag ||
+			posbits+n_bits > uint(len(buf))*8 ||
+			free_ent > maxcode {
 			if free_ent > maxcode {
 				n_bits += 1
 				bitmask = uint(1)<<n_bits - 1
@@ -78,103 +82,93 @@ func decompress(r io.Reader, w io.Writer) {
 				} else {
 					maxcode = bitmask
 				}
-				continue
 			}
-
-			// The next symbol is extracted from the next 2
-			// or 3 bytes.
-			i := posbits / 8
-			e := (posbits + n_bits - 1) / 8
-			l := uint(buf[i]) + uint(buf[i+1])<<8
-			if e <= i {
-				panic("e <= l")
-			}
-			if e > i+2 {
-				panic("e > i+2")
-			}
-			if e == i+2 {
-				l += uint(buf[i+2]) << 16
-			}
-			code := (l >> (posbits % 8)) & bitmask
-			posbits += n_bits
-
-			if first_code {
-				if code >= 256 {
-					log.Fatalf("oldcode %v code %v\n", oldcode, code)
-				}
-				oldcode = code
-				finchar = byte(code)
-				w.Write([]byte{byte(code)})
-				first_code = false
-				continue
-			}
-			if code == CLEAR && block_mode {
-				prefixof = map[uint]uint{}
-				free_ent = 256
+			if clear_flag {
 				n_bits = 9
 				bitmask = uint(1)<<n_bits - 1
 				maxcode = bitmask
-				continue
+				clear_flag = false
 			}
-			// The code from the input stream (code may
-			// change later).
-			incode := code
-
-			stack := []byte{}
-
-			if code >= free_ent {
-				// Special case for KwKwK
-				if code > free_ent {
-					log.Fatalf("corrupt input, code=%v\n", code)
-				}
-				code = oldcode
-				stack = []byte{finchar}
+			buf = make([]byte, n_bits)
+			n, err := r.Read(buf)
+			if n == 0 {
+				break
 			}
-
-			// Using the tables, reverse the code into a
-			// sequence of bytes.
-			for code >= 256 {
-				stack = append([]byte{suffixof[code]}, stack...)
-				code = prefixof[code]
+			if err != nil && err != io.EOF {
+				log.Println(err)
+				break
 			}
-
-			finchar = suffixof[code]
-			stack = append([]byte{finchar}, stack...)
-			w.Write(stack)
-
-			if free_ent < maxmaxcode {
-				prefixof[free_ent] = oldcode
-				suffixof[free_ent] = finchar
-				free_ent += 1
-			}
-			oldcode = incode
+			buf = buf[:n]
+			posbits = 0
 		}
 
-		// Copy the bits at the end of the buffer that do not
-		// make a complete input code to the beginning
-		// of the buffer.
+		// The next symbol is extracted from the next 2
+		// or 3 bytes.
 		i := posbits / 8
-		posbits %= 8
-		remainder := buf[i:]
-		R := len(remainder)
-		copy(buf, remainder)
-		// Fill the rest of the buffer.
-		n, err := r.Read(buf[R:])
-		bytesRead += n
-		buf = buf[:n+R]
+		e := (posbits + n_bits - 1) / 8
+		l := uint(buf[i]) + uint(buf[i+1])<<8
+		if e <= i {
+			panic("e <= l")
+		}
+		if e > i+2 {
+			panic("e > i+2")
+		}
+		if e == i+2 {
+			l += uint(buf[i+2]) << 16
+		}
+		code := (l >> (posbits % 8)) & bitmask
+		posbits += n_bits
+		if *codeFlag {
+			log.Printf("[%d]", code)
+		}
 
-		if n > 0 {
+		if first_code {
+			if code >= 256 {
+				log.Fatalf("oldcode %v code %v\n", oldcode, code)
+			}
+			oldcode = code
+			finchar = byte(code)
+			w.Write([]byte{byte(code)})
+			first_code = false
 			continue
 		}
+		if code == CLEAR && block_mode {
+			prefixof = map[uint]uint{}
+			free_ent = 256
+			clear_flag = true
+			continue
+		}
+		// The code from the input stream (code may
+		// change later).
+		incode := code
 
-		if err == io.EOF {
-			if R > 1 || (R == 1 && (buf[0]>>posbits) != 0) {
-				log.Println("Early EOF. File truncated?")
+		stack := []byte{}
+
+		if code >= free_ent {
+			// Special case for KwKwK
+			if code > free_ent {
+				log.Fatalf("corrupt input, code=%v\n", code)
 			}
-			break
+			code = oldcode
+			stack = []byte{finchar}
 		}
-		if err != nil {
-			log.Fatal(err)
+
+		// Using the tables, reverse the code into a
+		// sequence of bytes.
+		for code >= 256 {
+			stack = append([]byte{suffixof[code]}, stack...)
+			code = prefixof[code]
 		}
+
+		finchar = suffixof[code]
+		stack = append([]byte{finchar}, stack...)
+		w.Write(stack)
+
+		if free_ent < maxmaxcode {
+			prefixof[free_ent] = oldcode
+			suffixof[free_ent] = finchar
+			free_ent += 1
+		}
+		oldcode = incode
 	}
 }
