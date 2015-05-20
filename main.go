@@ -34,7 +34,7 @@ func decompress(r io.Reader, w io.Writer) {
 	}
 	maxbits := uint(header[2]) & 0x1f
 	block_mode := (header[2] & 0x80) != 0
-	maxmaxcode := uint(1) << maxbits
+	maxmaxcode := 1 << maxbits
 
 	if *info {
 		log.Print("maxbits ", maxbits,
@@ -45,26 +45,26 @@ func decompress(r io.Reader, w io.Writer) {
 	}
 
 	// The value of a suffix is a _byte_ (to output);
-	// the value of a prefix is a _code_ (as uint).
-	suffixof := map[uint]byte{}
-	prefixof := map[uint]uint{}
+	// the value of a prefix is a _code_ (as int).
+	suffixof := make([]byte, 256)
+	prefixof := make([]int, 256)
 	for i := uint(0); i < 256; i++ {
 		suffixof[i] = byte(i)
 		prefixof[i] = 99999
 	}
+	if block_mode {
+		suffixof = append(suffixof, 0)
+		prefixof = append(prefixof, 99999)
+	}
 
 	// Number of bits in input code, currently
 	n_bits := uint(9)
-	bitmask := uint(1)<<n_bits - 1
+	bitmask := 1<<n_bits - 1
 	maxcode := bitmask
-	var oldcode uint
+	var oldcode int
 	// True only when the first code is being read
 	first_code := true
 	var finchar byte
-	free_ent := uint(256)
-	if block_mode {
-		free_ent += 1
-	}
 
 	// Position, in bits, of next unread symbol.
 	// Bits within a byte are indexed with 0 (mod 8) being
@@ -76,10 +76,10 @@ func decompress(r io.Reader, w io.Writer) {
 	for {
 		if clear_flag ||
 			posbits+n_bits > uint(len(buf))*8 ||
-			free_ent > maxcode {
-			if free_ent > maxcode {
+			len(prefixof) > maxcode {
+			if len(prefixof) > maxcode {
 				n_bits += 1
-				bitmask = uint(1)<<n_bits - 1
+				bitmask = 1<<n_bits - 1
 				if n_bits == maxbits {
 					maxcode = maxmaxcode
 				} else {
@@ -88,7 +88,7 @@ func decompress(r io.Reader, w io.Writer) {
 			}
 			if clear_flag {
 				n_bits = 9
-				bitmask = uint(1)<<n_bits - 1
+				bitmask = 1<<n_bits - 1
 				maxcode = bitmask
 				clear_flag = false
 			}
@@ -109,7 +109,7 @@ func decompress(r io.Reader, w io.Writer) {
 		// or 3 bytes.
 		i := posbits / 8
 		e := (posbits + n_bits - 1) / 8
-		l := uint(buf[i]) + uint(buf[i+1])<<8
+		l := int(buf[i]) + int(buf[i+1])<<8
 		if e <= i {
 			panic("e <= l")
 		}
@@ -117,7 +117,7 @@ func decompress(r io.Reader, w io.Writer) {
 			panic("e > i+2")
 		}
 		if e == i+2 {
-			l += uint(buf[i+2]) << 16
+			l += int(buf[i+2]) << 16
 		}
 		code := (l >> (posbits % 8)) & bitmask
 		posbits += n_bits
@@ -136,8 +136,8 @@ func decompress(r io.Reader, w io.Writer) {
 			continue
 		}
 		if code == CLEAR && block_mode {
-			prefixof = map[uint]uint{}
-			free_ent = 256
+			prefixof = prefixof[:256]
+			suffixof = suffixof[:256]
 			clear_flag = true
 			continue
 		}
@@ -147,9 +147,9 @@ func decompress(r io.Reader, w io.Writer) {
 
 		stack := []byte{}
 
-		if code >= free_ent {
+		if code >= len(prefixof) {
 			// Special case for KwKwK
-			if code > free_ent {
+			if code > len(prefixof) {
 				log.Fatalf("corrupt input, code=%v\n", code)
 			}
 			code = oldcode
@@ -167,10 +167,9 @@ func decompress(r io.Reader, w io.Writer) {
 		stack = append([]byte{finchar}, stack...)
 		w.Write(stack)
 
-		if free_ent < maxmaxcode {
-			prefixof[free_ent] = oldcode
-			suffixof[free_ent] = finchar
-			free_ent += 1
+		if len(prefixof) < maxmaxcode {
+			prefixof = append(prefixof, oldcode)
+			suffixof = append(suffixof, finchar)
 		}
 		oldcode = incode
 	}
